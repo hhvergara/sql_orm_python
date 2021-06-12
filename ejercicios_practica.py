@@ -17,122 +17,212 @@ __version__ = "1.1"
 
 import sqlite3
 
-import sqlalchemy
-from sqlalchemy import Column, Integer, String, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
-
-# Crear el motor (engine) de la base de datos
-engine = sqlalchemy.create_engine("sqlite:///secundaria.db")
-base = declarative_base()
-
-
-class Tutor(base):
-    __tablename__ = "tutor"
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    
-    def __repr__(self):
-        return f"Tutor: {self.name}"
-
-
-class Estudiante(base):
-    __tablename__ = "estudiante"
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    age = Column(Integer)
-    grade = Column(Integer)
-    tutor_id = Column(Integer, ForeignKey("tutor.id"))
-
-    tutor = relationship("Tutor")
-
-    def __repr__(self):
-        return f"Estudiante: {self.name}, edad {self.age}, grado {self.grade}, tutor {self.tutor.name}"
+# https://extendsclass.com/sqlite-browser.html
 
 
 def create_schema():
-    # Borrar todos las tablas existentes en la base de datos
-    # Esta linea puede comentarse sino se eliminar los datos
-    base.metadata.drop_all(engine)
 
-    # Crear las tablas
-    base.metadata.create_all(engine)
+    # Conectarnos a la base de datos
+    # En caso de que no exista el archivo se genera
+    # como una base de datos vacia
+    conn = sqlite3.connect('secundaria.db')
+
+    # Crear el cursor para poder ejecutar las querys
+    c = conn.cursor()
+
+    # Ejecutar una query
+    c.execute("""
+                DROP TABLE IF EXISTS estudiante;
+            """)
+
+    # Ejecutar una query
+    c.execute("""
+            CREATE TABLE estudiante(
+                [id] INTEGER PRIMARY KEY AUTOINCREMENT,
+                [name] TEXT NOT NULL,
+                [age] INTEGER NOT NULL,
+                [grade] INTEGER,
+                [tutor] TEXT
+            );
+            """)
+
+    # Para salvar los cambios realizados en la DB debemos
+    # ejecutar el commit, NO olvidarse de este paso!
+    conn.commit()
+
+    # Cerrar la conexión con la base de datos
+    conn.close()
+
 
 
 def fill():
     print('Completemos esta tablita!')
-    # Llenar la tabla de la secundaria con al munos 2 tutores
-    # Cada tutor tiene los campos:
-    # id --> este campo es auto incremental por lo que no deberá completarlo
-    # name --> El nombre del tutor (puede ser solo nombre sin apellido)
-
     # Llenar la tabla de la secundaria con al menos 5 estudiantes
     # Cada estudiante tiene los posibles campos:
     # id --> este campo es auto incremental por lo que no deberá completarlo
     # name --> El nombre del estudiante (puede ser solo nombre sin apellido)
     # age --> cuantos años tiene el estudiante
     # grade --> en que año de la secundaria se encuentra (1-6)
-    # tutor --> el tutor de ese estudiante (el objeto creado antes)
+    # tutor --> nombre de su tutor
 
-    # No olvidarse que antes de poder crear un estudiante debe haberse
-    # primero creado el tutor.
+    # Se debe utilizar la sentencia INSERT.
+    # Observar que hay campos como "grade" y "tutor" que no son obligatorios
+    # en el schema creado, puede obivar en algunos casos completar esos campos
+    valuesDB = []
+    rep = False
+    records = ["name", "age", "grade", "tutor"]
+    transform = True
+
+    #Bucle para crear alumnos
+    while True:    
+        for alumn in range(len(records)):
+            #Bucle de validación
+            while True:
+                
+                records_inp = str(input(f"Ingrese el dato para el campo {records[alumn]}: "))
+                #Para evitar la transformación de str a int cuando no es necesario
+                if records[alumn] == "name" or records[alumn] == "tutor":
+                    transform = False
+                else:
+                    transform = True
+
+                #Verificar si en los campos "age" y "grade" los datos son numéricos
+                while transform:
+                    if (records[alumn] == "age" or records[alumn] == "grade") and records_inp.isdigit():
+                        break
+                    else:
+                        print(f"-El campo {records[alumn]} no puede llevar carácteres alfabéticos...")
+                        rep = True
+                        break
+                #Volver al inicio del bucle si age o grade son alfanuméricos
+                if rep:
+                    rep = False
+                    continue
+                else:
+                    break
+            #Agrego valores
+            valuesDB.append(records_inp)
+        #Agregar registro a la tabla
+
+        #Agregar los datos a la DB
+        conn = sqlite3.connect('secundaria.db')
+        c = conn.cursor()
+        c.execute("""
+                INSERT INTO estudiante(name,age,grade,tutor)
+                VALUES(?,?,?,?);""",(valuesDB))
+        #Guardar y cerrar
+        conn.commit()
+        conn.close()
+        #Reset de la matriz valuesDB para volver a generar un nuevo registro
+        valuesDB.clear()
+
+        #Crear más registros de alumnos:
+        alumn_record = str(input("Desea agregar otro registro de estudiante?: ")).capitalize()
+        if alumn_record == "Si":
+            print("**Creando otro registro**\n")
+        elif alumn_record == "No":
+            break
+        #Realizado
 
 
 def fetch():
-    print('Comprovemos su contenido, ¿qué hay en la tabla?')
-    # Crear una query para imprimir en pantalla
-    # todos los objetos creaods de la tabla estudiante.
-    # Imprimir en pantalla cada objeto que traiga la query
-    # Realizar un bucle para imprimir de una fila a la vez
+    print('Comprobemos su contenido, ¿qué hay en la tabla?')
+    # Utilizar la sentencia SELECT para imprimir en pantalla
+    # todas las filas con todas sus columnas
+    # Utilizar fetchone para imprimir de una fila a la vez
+
+    conn = sqlite3.connect('secundaria.db')
+    c = conn.cursor()
+
+    c.execute('SELECT * FROM estudiante;')
+    while True:
+        fetch_one = c.fetchone()
+        if fetch_one is None:
+            break
+        print(fetch_one)
+
+    #Guardar y cerrar
+    conn.commit()
+    conn.close()
+    #Realizado
 
 
-def search_by_tutor(tutor):
+def search_by_grade(grade):
     print('Operación búsqueda!')
-    # Esta función recibe como parámetro el nombre de un posible tutor.
-    # Crear una query para imprimir en pantalla
-    # aquellos estudiantes que tengan asignado dicho tutor.
+    # Utilizar la sentencia SELECT para imprimir en pantalla
+    # aquellos estudiantes que se encuentra en el año "grade"
 
-    # Para poder realizar esta query debe usar join, ya que
-    # deberá crear la query para la tabla estudiante pero
-    # buscar por la propiedad de tutor.name
+    # De la lista de esos estudiantes el SELECT solo debe traer
+    # las siguientes columnas por fila encontrada:
+    # id / name / age
+    conn = sqlite3.connect('secundaria.db')
+    c_grade = conn.cursor()
+    c_2 = conn.cursor()
+    c_name = conn.cursor()
+    #Querys
+    c_grade.execute(f'SELECT grade FROM estudiante WHERE grade = {grade};')
+    c_2.execute('SELECT id, name, age FROM estudiante;')
+    c_name.execute(f'SELECT name FROM estudiante WHERE grade = {grade};')
+
+    while True:
+        
+        fetch_grade = c_grade.fetchone()
+        fetch_two = c_2.fetchone()
+        fetch_name = c_name.fetchone()
+
+        if (fetch_grade is None) or (fetch_two is None) or (fetch_name is None):
+            break
+        print(f"El estudiante {fetch_name} está en el grado {fetch_grade}")
+        print(fetch_two)
+    #Cerrando sesión
+    conn.close()
+    #Realizado
+
+
+def insert(new_student):
+    print('Nuevos ingresos!')
+    # Utilizar la sentencia INSERT para ingresar nuevos estudiantes
+    # a la secundaria
+    conn = sqlite3.connect('secundaria.db')
+    c = conn.cursor()
+
+    c.execute(""" INSERT INTO estudiante(name, age)
+              VALUES(?,?)""",(new_student))
+
+    #Guardar y cerrar
+    conn.commit()
+    conn.close()
+    #Realizado
 
 
 def modify(id, name):
     print('Modificando la tabla')
-    # Deberá actualizar el tutor de un estudiante, cambiarlo para eso debe
-    # 1) buscar con una query el tutor por "tutor.name" usando name
-    # pasado como parámetro y obtener el objeto del tutor
-    # 2) buscar con una query el estudiante por "estudiante.id" usando
-    # el id pasado como parámetro
-    # 3) actualizar el objeto de tutor del estudiante con el obtenido
-    # en el punto 1 y actualizar la base de datos
+    # Utilizar la sentencia UPDATE para modificar aquella fila (estudiante)
+    # cuyo id sea el "id" pasado como parámetro,
+    # modificar su nombre por "name" pasado como parámetro
+    conn = sqlite3.connect('secundaria.db')
+    c = conn.cursor()
 
-    # TIP: En clase se hizo lo mismo para las nacionalidades con
-    # en la función update_persona_nationality
+    c.execute('UPDATE estudiante SET name = ? WHERE id = ?;',(name,id))
 
-
-def count_grade(grade):
-    print('Estudiante por grado')
-    # Utilizar la sentencia COUNT para contar cuantos estudiante
-    # se encuentran cursando el grado "grade" pasado como parámetro
-    # Imprimir en pantalla el resultado
-
-    # TIP: En clase se hizo lo mismo para las nacionalidades con
-    # en la función count_persona
+    #Guardar y cerrar
+    conn.commit()
+    conn.close()
+    #Realizado
 
 
 if __name__ == '__main__':
     print("Bienvenidos a otra clase de Inove con Python")
-    create_schema()   # create and reset database (DB)
-    # fill()
-    # fetch()
+    #create_schema()   # create and reset database (DB)
+    #fill()
+    #fetch()
 
-    tutor = 'nombre_tutor'
-    # search_by_tutor(tutor)
+    grade = 3
+    #search_by_grade(grade)
 
-    nuevo_tutor = 'nombre_tutor'
+    new_student = ['You', 16]
+    #insert(new_student)
+
+    name = '¿Inove?'
     id = 2
-    # modify(id, nuevo_tutor)
-
-    grade = 2
-    # count_grade(grade)
+    #modify(id, name)
